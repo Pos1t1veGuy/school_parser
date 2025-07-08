@@ -141,14 +141,23 @@ class Subject:
 
 
 class LessonsParser:
-	def main(load_subjects: bool = True, save_subjects_json: bool = True, subject_text_file: str = 'subject_{name}.html'):
+	def main(save_subjects_json: bool = True, subject_text_file: str = 'subject_{name}.html'):
+		global atoken
+
+		load_subjects = input('Load subjects again? (y/n): ')
+		while not load_subjects in ['n','y']:
+			print('Specified invalid answer, it must be only n or y. Try again...\n')
+			load_subjects = input('Load subjects again? (y/n): ')
+
+		load_subjects = load_subjects == 'y'
+		
 		try:
 			with rq.Session() as session:
 				session.headers.update({"User-Agent": useragent})
 				if load_subjects:
 					subjects_raw = LessonsParser.load_subjects(session, save_to_json=save_subjects_json)
 				else:
-					subjects_raw = json.load(open(subjects_json_file, 'r', encoding="utf-8"))
+					subjects_raw = json.load(open(subjects_json_file, 'r', encoding="utf-8")) if os.path.isfile(subjects_json_file) else {}
 					atoken = LessonsParser.auth(session)
 				print('[+] Authorized, received a token')
 
@@ -159,13 +168,16 @@ class LessonsParser:
 				choice = None
 				while choice == None:
 					try:
-						choice = LessonsParser.some_inputs([sub.name for sub in subjects], comment='Choose a subject number')
+						choice = LessonsParser.some_inputs(
+							[sub.name for sub in subjects], comment='Choose a subject number', special_commands=commands
+						)
 					except IndexError:
 						print(f'[-] Failed to chose answer, try again or close using "esc" or "ex" command...')
 						continue
 
 				subject = [subject for subject in subjects if subject.name == choice][0]
 
+				print(f'[+] Saving result to "{subject_text_file.format(name=subject.name.replace(' ', '_'))}"...')
 				try:
 					return subject.load_lessons_text(session, save_to_file=subject_text_file)
 				except rq.exceptions.HTTPError as e:
@@ -210,6 +222,7 @@ class LessonsParser:
 
 	def some_inputs(inputs: List[str], comment: str = '', special_commands: Dict[str, callable] = {}) -> str:
 		input_string = ''
+		i = 0
 		for i, obj in enumerate(inputs):
 			input_string += f'{"\n" if i != 0 else ""}{i}. {" " if i < 10 else ""}{obj}'
 		choice = input(f'\n{comment}\n\n' + input_string + '\n\n>>> ')
@@ -225,9 +238,9 @@ class LessonsParser:
 		raise IndexError(f'[-] You chose invalid answer "{choice}", but you can only choose only value [0-{i}]')
 
 	def exit():
-		print('[+] Stopping...')
+		print('\n[+] Stopping...')
 		exit()
 
 
 if __name__ == '__main__':
-	LessonsParser.main(load_subjects=False, save_subjects_json=True)
+	LessonsParser.main()
